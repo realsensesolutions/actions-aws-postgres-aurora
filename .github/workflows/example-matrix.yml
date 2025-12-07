@@ -17,6 +17,11 @@ on:
           - destroy
           - plan
 
+# Required for OIDC authentication with AWS
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     name: Deploy ${{ matrix.instance }}

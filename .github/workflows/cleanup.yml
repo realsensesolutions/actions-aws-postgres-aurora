@@ -1,0 +1,88 @@
+name: Cleanup Resources
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_name:
+        description: 'Instance name to cleanup (e.g., test-aurora-action)'
+        required: true
+        default: 'test-aurora-action'
+
+env:
+  region: us-east-1
+
+jobs:
+  cleanup:
+    name: Cleanup AWS Resources
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.region }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: cleanup-${{ github.actor }}
+
+      - name: Delete Aurora Cluster
+        continue-on-error: true
+        run: |
+          CLUSTER="${{ inputs.instance_name }}-aurora"
+          
+          # Delete instance first
+          aws rds delete-db-instance \
+            --db-instance-identifier "${CLUSTER}-instance" \
+            --skip-final-snapshot 2>/dev/null || echo "Instance not found"
+          
+          # Wait for instance deletion
+          aws rds wait db-instance-deleted \
+            --db-instance-identifier "${CLUSTER}-instance" 2>/dev/null || true
+          
+          # Delete cluster
+          aws rds delete-db-cluster \
+            --db-cluster-identifier "${CLUSTER}" \
+            --skip-final-snapshot 2>/dev/null || echo "Cluster not found"
+          
+          # Wait for cluster deletion
+          aws rds wait db-cluster-deleted \
+            --db-cluster-identifier "${CLUSTER}" 2>/dev/null || true
+
+      - name: Delete Secret
+        continue-on-error: true
+        run: |
+          aws secretsmanager delete-secret \
+            --secret-id "${{ inputs.instance_name }}-aurora-credentials" \
+            --force-delete-without-recovery || echo "Secret not found"
+
+      - name: Delete DB Subnet Group
+        continue-on-error: true
+        run: |
+          aws rds delete-db-subnet-group \
+            --db-subnet-group-name "${{ inputs.instance_name }}-aurora-subnets" || echo "Subnet group not found"
+
+      - name: Delete Parameter Group
+        continue-on-error: true
+        run: |
+          aws rds delete-db-cluster-parameter-group \
+            --db-cluster-parameter-group-name "${{ inputs.instance_name }}-aurora-params" || echo "Parameter group not found"
+
+      - name: Delete Security Group
+        continue-on-error: true
+        run: |
+          SG_ID=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=${{ inputs.instance_name }}-aurora-sg" \
+            --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null)
+          
+          if [ "$SG_ID" != "None" ] && [ -n "$SG_ID" ]; then
+            aws ec2 delete-security-group --group-id "$SG_ID"
+            echo "Deleted security group: $SG_ID"
+          else
+            echo "Security group not found"
+          fi
+
+      - name: Cleanup Complete
+        run: echo "✅ Cleanup completed for ${{ inputs.instance_name }}"
+

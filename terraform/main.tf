@@ -13,9 +13,9 @@ locals {
   
   # Use provided VPC/subnets or discover from tags
   use_existing_vpc = var.vpc_id != ""
-  vpc_id           = local.use_existing_vpc ? var.vpc_id : data.aws_vpc.discovered[0].id
-  vpc_cidr         = local.use_existing_vpc ? data.aws_vpc.existing[0].cidr_block : data.aws_vpc.discovered[0].cidr_block
-  subnet_ids       = local.use_existing_vpc ? split(",", var.subnet_ids) : data.aws_subnets.discovered[0].ids
+  vpc_id           = local.use_existing_vpc ? var.vpc_id : one(data.aws_vpc.discovered[*].id)
+  vpc_cidr         = local.use_existing_vpc ? one(data.aws_vpc.existing[*].cidr_block) : one(data.aws_vpc.discovered[*].cidr_block)
+  subnet_ids       = local.use_existing_vpc ? split(",", var.subnet_ids) : one(data.aws_subnets.discovered[*].ids)
 }
 
 ################################################################################
@@ -49,7 +49,7 @@ data "aws_subnets" "discovered" {
   
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.discovered[0].id]
+    values = [one(data.aws_vpc.discovered[*].id)]
   }
   filter {
     name   = "tag:Type"

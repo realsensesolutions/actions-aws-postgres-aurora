@@ -1,25 +1,39 @@
 ################################################################################
 # Aurora Serverless v2 PostgreSQL
 # 
-# Best practices applied:
-# - Storage encryption enabled
-# - SSL connections enforced
-# - Credentials stored in Secrets Manager
-# - Private subnets only (no public access)
-# - Security group restricts to VPC CIDR
+# Supports two modes:
+# 1. Use existing VPC (provide vpc_id and subnet_ids)
+# 2. Auto-discover VPC from network action (default)
 ################################################################################
 
 locals {
   name_prefix      = var.instance
   cluster_name     = "${local.name_prefix}-aurora"
   parameter_family = "aurora-postgresql${split(".", var.engine_version)[0]}"
+  
+  # Use provided VPC/subnets or discover from tags
+  use_existing_vpc = var.vpc_id != ""
+  vpc_id           = local.use_existing_vpc ? var.vpc_id : data.aws_vpc.discovered[0].id
+  vpc_cidr         = local.use_existing_vpc ? data.aws_vpc.existing[0].cidr_block : data.aws_vpc.discovered[0].cidr_block
+  subnet_ids       = local.use_existing_vpc ? split(",", var.subnet_ids) : data.aws_subnets.discovered[0].ids
 }
 
 ################################################################################
-# Data Sources - VPC and Subnets from Network Action
+# Data Sources - Existing VPC (when vpc_id is provided)
 ################################################################################
 
-data "aws_vpc" "main" {
+data "aws_vpc" "existing" {
+  count = local.use_existing_vpc ? 1 : 0
+  id    = var.vpc_id
+}
+
+################################################################################
+# Data Sources - Discover VPC from Network Action (when vpc_id is NOT provided)
+################################################################################
+
+data "aws_vpc" "discovered" {
+  count = local.use_existing_vpc ? 0 : 1
+  
   filter {
     name   = "tag:Instance"
     values = [var.instance]
@@ -30,10 +44,12 @@ data "aws_vpc" "main" {
   }
 }
 
-data "aws_subnets" "private" {
+data "aws_subnets" "discovered" {
+  count = local.use_existing_vpc ? 0 : 1
+  
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.main.id]
+    values = [data.aws_vpc.discovered[0].id]
   }
   filter {
     name   = "tag:Type"
@@ -47,7 +63,6 @@ data "aws_subnets" "private" {
 
 ################################################################################
 # Password Generation
-# Note: Using alphanumeric only to avoid URL encoding issues in connection string
 ################################################################################
 
 resource "random_password" "master" {
@@ -89,7 +104,7 @@ resource "aws_secretsmanager_secret_version" "credentials" {
 resource "aws_db_subnet_group" "main" {
   name        = "${local.cluster_name}-subnets"
   description = "Subnet group for ${local.cluster_name}"
-  subnet_ids  = data.aws_subnets.private.ids
+  subnet_ids  = local.subnet_ids
 
   tags = {
     Name = "${local.cluster_name}-subnets"
@@ -103,7 +118,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_security_group" "main" {
   name        = "${local.cluster_name}-sg"
   description = "Security group for ${local.cluster_name}"
-  vpc_id      = data.aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   tags = {
     Name = "${local.cluster_name}-sg"
@@ -116,7 +131,7 @@ resource "aws_vpc_security_group_ingress_rule" "postgres" {
   from_port         = 5432
   to_port           = 5432
   ip_protocol       = "tcp"
-  cidr_ipv4         = data.aws_vpc.main.cidr_block
+  cidr_ipv4         = local.vpc_cidr
 
   tags = {
     Name = "${local.cluster_name}-postgres-ingress"
@@ -143,7 +158,6 @@ resource "aws_rds_cluster_parameter_group" "main" {
   family      = local.parameter_family
   description = "Parameter group for ${local.cluster_name}"
 
-  # Force SSL connections
   parameter {
     name  = "rds.force_ssl"
     value = "1"
@@ -161,42 +175,31 @@ resource "aws_rds_cluster_parameter_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier = local.cluster_name
 
-  # Engine configuration
   engine         = "aurora-postgresql"
   engine_mode    = "provisioned"
   engine_version = var.engine_version
 
-  # Database configuration
   database_name   = var.database_name
   master_username = var.master_username
   master_password = random_password.master.result
 
-  # Network configuration
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.main.id]
-
-  # Parameter group
+  db_subnet_group_name            = aws_db_subnet_group.main.name
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.main.name
+  vpc_security_group_ids          = [aws_security_group.main.id]
 
-  # Serverless v2 scaling (0.5 ACU minimum)
   serverlessv2_scaling_configuration {
     min_capacity = var.min_capacity
     max_capacity = var.max_capacity
   }
 
-  # Security
-  storage_encrypted = true
-
-  # Backup
+  storage_encrypted       = true
   backup_retention_period = var.backup_retention_period
   preferred_backup_window = "03:00-04:00"
 
-  # Deletion protection
-  deletion_protection = var.deletion_protection
-  skip_final_snapshot = !var.deletion_protection
+  deletion_protection       = var.deletion_protection
+  skip_final_snapshot       = !var.deletion_protection
   final_snapshot_identifier = var.deletion_protection ? "${local.cluster_name}-final-${formatdate("YYYY-MM-DD", timestamp())}" : null
 
-  # Apply changes immediately
   apply_immediately = true
 
   tags = {
@@ -219,16 +222,12 @@ resource "aws_rds_cluster_instance" "main" {
   identifier         = "${local.cluster_name}-instance"
   cluster_identifier = aws_rds_cluster.main.id
 
-  # Serverless v2 requires db.serverless instance class
   instance_class = "db.serverless"
   engine         = aws_rds_cluster.main.engine
   engine_version = aws_rds_cluster.main.engine_version
 
-  # No public access
   publicly_accessible = false
-
-  # Apply changes immediately
-  apply_immediately = true
+  apply_immediately   = true
 
   tags = {
     Name = "${local.cluster_name}-instance"

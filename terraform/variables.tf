@@ -3,7 +3,7 @@
 ################################################################################
 
 variable "instance" {
-  description = "Instance name (must match network action)"
+  description = "Instance name"
   type        = string
 }
 
@@ -11,6 +11,19 @@ variable "aws_region" {
   description = "AWS region"
   type        = string
   default     = "us-east-1"
+}
+
+# Optional: Use existing VPC instead of discovering from network action
+variable "vpc_id" {
+  description = "Existing VPC ID (optional - if not provided, discovers from network action)"
+  type        = string
+  default     = ""
+}
+
+variable "subnet_ids" {
+  description = "Comma-separated subnet IDs (required if vpc_id is provided)"
+  type        = string
+  default     = ""
 }
 
 variable "database_name" {

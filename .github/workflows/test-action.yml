@@ -10,19 +10,39 @@ env:
   region: us-east-1
 
 jobs:
-  test:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: |
+          cat > backend_override.tf <<EOF
+          terraform { backend "local" { path = "test.tfstate" } }
+          EOF
+          terraform init -backend=false
+          terraform validate
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: validate
+
     permissions:
       id-token: write
       contents: read
 
-    runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.region }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -30,60 +50,48 @@ jobs:
 
       - name: Setup Terraform Backend
         uses: alonch/actions-aws-backend-setup@main
-        id: backend
         with:
           instance: test-aurora-action
 
-      - name: Setup Network
-        uses: realsensesolutions/actions-aws-network@main
-        id: network
-
-      - name: Deploy Aurora Serverless v2
+      - name: Deploy Aurora
         uses: ./
         id: aurora
         with:
           name: test-aurora-action
           action: apply
+          vpc_id: ${{ secrets.TEST_VPC_ID }}
+          subnet_ids: ${{ secrets.TEST_SUBNET_IDS }}
           deletion_protection_enabled: 'false'
           min_capacity: '0.5'
           max_capacity: '2'
 
       - name: Display Outputs
         run: |
-          echo "=== Aurora Cluster Outputs ==="
-          echo "Cluster Endpoint: ${{ steps.aurora.outputs.cluster_endpoint }}"
-          echo "Cluster ARN: ${{ steps.aurora.outputs.cluster_arn }}"
-          echo "Cluster ID: ${{ steps.aurora.outputs.cluster_id }}"
-          echo "Database Name: ${{ steps.aurora.outputs.database_name }}"
-          echo "Master Username: ${{ steps.aurora.outputs.master_username }}"
-          echo "Port: ${{ steps.aurora.outputs.port }}"
-          echo "Secret ARN: ${{ steps.aurora.outputs.secret_arn }}"
-          echo "Security Group ID: ${{ steps.aurora.outputs.security_group_id }}"
-          echo "Connection String: ${{ steps.aurora.outputs.connection_string }}"
+          echo "=== Aurora Outputs ==="
+          echo "Endpoint: ${{ steps.aurora.outputs.cluster_endpoint }}"
+          echo "ARN: ${{ steps.aurora.outputs.cluster_arn }}"
+          echo "Secret: ${{ steps.aurora.outputs.secret_arn }}"
+          echo "Database: ${{ steps.aurora.outputs.database_name }}"
 
-      - name: Test Connection (Get Secret)
+      - name: Test Credentials
         run: |
-          echo "Getting Aurora credentials from Secrets Manager..."
           SECRET=$(aws secretsmanager get-secret-value \
             --secret-id ${{ steps.aurora.outputs.secret_arn }} \
-            --query 'SecretString' \
-            --output text)
+            --query 'SecretString' --output text)
           
           if [ -n "$SECRET" ]; then
-            echo "✓ Credentials retrieved successfully"
+            echo "✅ Credentials retrieved"
             echo "Host: $(echo $SECRET | jq -r '.host')"
-            echo "Port: $(echo $SECRET | jq -r '.port')"
-            echo "Database: $(echo $SECRET | jq -r '.dbname')"
-            echo "Username: $(echo $SECRET | jq -r '.username')"
           else
-            echo "✗ Failed to get credentials"
+            echo "❌ Failed"
             exit 1
           fi
 
-      # - name: Cleanup - Destroy Cluster
+      # - name: Cleanup
       #   if: always()
       #   uses: ./
       #   with:
       #     name: test-aurora-action
       #     action: destroy
-      #     deletion_protection_enabled: 'false'
+      #     vpc_id: ${{ secrets.TEST_VPC_ID }}
+      #     subnet_ids: ${{ secrets.TEST_SUBNET_IDS }}

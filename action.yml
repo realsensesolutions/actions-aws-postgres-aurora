@@ -8,69 +8,77 @@ branding:
 
 inputs:
   name:
-    description: 'Instance name (must match network action)'
+    description: 'Instance name'
     required: true
   action:
-    description: 'Action to perform: apply, destroy, plan'
+    description: 'Action: apply, destroy, plan'
     required: false
     default: 'apply'
   aws_region:
     description: 'AWS region'
     required: false
     default: 'us-east-1'
+  vpc_id:
+    description: 'Existing VPC ID (optional)'
+    required: false
+    default: ''
+  subnet_ids:
+    description: 'Comma-separated subnet IDs (required if vpc_id provided)'
+    required: false
+    default: ''
   database_name:
-    description: 'Database name to create'
+    description: 'Database name'
     required: false
     default: 'appdb'
   deletion_protection_enabled:
-    description: 'Enable deletion protection (recommended for production)'
+    description: 'Enable deletion protection'
     required: false
     default: 'false'
   min_capacity:
-    description: 'Minimum ACU capacity (0.5 to 128)'
+    description: 'Minimum ACU (0.5-128)'
     required: false
     default: '0.5'
   max_capacity:
-    description: 'Maximum ACU capacity (0.5 to 128)'
+    description: 'Maximum ACU (0.5-128)'
     required: false
     default: '4'
   backup_retention_period:
-    description: 'Backup retention in days (1-35)'
+    description: 'Backup retention days (1-35)'
     required: false
     default: '7'
   lock_timeout:
-    description: 'Terraform state lock timeout'
+    description: 'Terraform lock timeout'
     required: false
     default: '5m'
 
 outputs:
   cluster_endpoint:
     description: 'Aurora cluster endpoint'
-    value: ${{ steps.terraform.outputs.cluster_endpoint }}
+    value: ${{ steps.outputs.outputs.cluster_endpoint }}
   cluster_arn:
     description: 'Aurora cluster ARN'
-    value: ${{ steps.terraform.outputs.cluster_arn }}
+    value: ${{ steps.outputs.outputs.cluster_arn }}
   cluster_id:
     description: 'Aurora cluster identifier'
-    value: ${{ steps.terraform.outputs.cluster_id }}
+    value: ${{ steps.outputs.outputs.cluster_id }}
   secret_arn:
-    description: 'Secrets Manager ARN containing credentials'
-    value: ${{ steps.terraform.outputs.secret_arn }}
+    description: 'Secrets Manager ARN with credentials'
+    value: ${{ steps.outputs.outputs.secret_arn }}
   database_name:
     description: 'Database name'
-    value: ${{ steps.terraform.outputs.database_name }}
+    value: ${{ steps.outputs.outputs.database_name }}
   master_username:
     description: 'Master username'
-    value: ${{ steps.terraform.outputs.master_username }}
+    value: ${{ steps.outputs.outputs.master_username }}
   port:
     description: 'Database port'
-    value: ${{ steps.terraform.outputs.port }}
+    value: ${{ steps.outputs.outputs.port }}
   security_group_id:
     description: 'Security group ID'
-    value: ${{ steps.terraform.outputs.security_group_id }}
+    value: ${{ steps.outputs.outputs.security_group_id }}
   connection_string:
     description: 'Connection string template'
-    value: ${{ steps.terraform.outputs.connection_string }}
+    value: ${{ steps.outputs.outputs.connection_string }}
 
 runs:
   using: 'composite'
@@ -80,19 +88,78 @@ runs:
       with:
         terraform_wrapper: false
 
-    - name: Run Terraform
-      id: terraform
+    - name: Terraform Init
       shell: bash
+      working-directory: ${{ github.action_path }}/terraform
+      env:
+        TF_VAR_instance: ${{ inputs.name }}
+      run: |
+        if [[ -n "${TF_BACKEND_BUCKET}" ]]; then
+          terraform init -input=false -reconfigure \
+            -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+            -backend-config="key=aurora/${TF_VAR_instance}/terraform.tfstate" \
+            -backend-config="region=${TF_BACKEND_REGION:-${{ inputs.aws_region }}}" \
+            -backend-config="dynamodb_table=${TF_BACKEND_DYNAMODB_TABLE:-}"
+        else
+          cat > backend_override.tf <<EOF
+        terraform { backend "local" { path = "${TF_VAR_instance}.tfstate" } }
+        EOF
+          terraform init -input=false -reconfigure
+        fi
+
+    - name: Terraform Plan
+      if: inputs.action == 'apply' || inputs.action == 'plan'
+      shell: bash
+      working-directory: ${{ github.action_path }}/terraform
       env:
         TF_VAR_instance: ${{ inputs.name }}
         TF_VAR_aws_region: ${{ inputs.aws_region }}
+        TF_VAR_vpc_id: ${{ inputs.vpc_id }}
+        TF_VAR_subnet_ids: ${{ inputs.subnet_ids }}
         TF_VAR_database_name: ${{ inputs.database_name }}
         TF_VAR_min_capacity: ${{ inputs.min_capacity }}
         TF_VAR_max_capacity: ${{ inputs.max_capacity }}
         TF_VAR_backup_retention_period: ${{ inputs.backup_retention_period }}
         TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
-        TF_ACTION: ${{ inputs.action }}
-        TF_LOCK_TIMEOUT: ${{ inputs.lock_timeout }}
       run: |
-        chmod +x ${{ github.action_path }}/entrypoint.sh
-        ${{ github.action_path }}/entrypoint.sh
+        terraform plan -input=false -lock-timeout=${{ inputs.lock_timeout }} -out=tfplan
+
+    - name: Terraform Apply
+      if: inputs.action == 'apply'
+      shell: bash
+      working-directory: ${{ github.action_path }}/terraform
+      run: |
+        terraform apply -input=false -lock-timeout=${{ inputs.lock_timeout }} -auto-approve tfplan
+
+    - name: Terraform Destroy
+      if: inputs.action == 'destroy'
+      shell: bash
+      working-directory: ${{ github.action_path }}/terraform
+      env:
+        TF_VAR_instance: ${{ inputs.name }}
+        TF_VAR_aws_region: ${{ inputs.aws_region }}
+        TF_VAR_vpc_id: ${{ inputs.vpc_id }}
+        TF_VAR_subnet_ids: ${{ inputs.subnet_ids }}
+        TF_VAR_database_name: ${{ inputs.database_name }}
+        TF_VAR_min_capacity: ${{ inputs.min_capacity }}
+        TF_VAR_max_capacity: ${{ inputs.max_capacity }}
+        TF_VAR_backup_retention_period: ${{ inputs.backup_retention_period }}
+        TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
+      run: |
+        terraform destroy -input=false -lock-timeout=${{ inputs.lock_timeout }} -auto-approve
+
+    - name: Set Outputs
+      id: outputs
+      if: inputs.action == 'apply'
+      shell: bash
+      working-directory: ${{ github.action_path }}/terraform
+      run: |
+        echo "cluster_endpoint=$(terraform output -raw cluster_endpoint 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "cluster_arn=$(terraform output -raw cluster_arn 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "cluster_id=$(terraform output -raw cluster_id 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "secret_arn=$(terraform output -raw secret_arn 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "database_name=$(terraform output -raw database_name 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "master_username=$(terraform output -raw master_username 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "port=$(terraform output -raw port 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "security_group_id=$(terraform output -raw security_group_id 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+        echo "connection_string=$(terraform output -raw connection_string 2>/dev/null || echo '')" >> $GITHUB_OUTPUT

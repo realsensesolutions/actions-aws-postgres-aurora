@@ -1,0 +1,98 @@
+name: 'AWS Aurora Serverless v2 PostgreSQL'
+description: 'Provision Aurora Serverless v2 PostgreSQL cluster (0.5 ACU minimum)'
+author: 'realsensesolutions'
+
+branding:
+  icon: 'database'
+  color: 'orange'
+
+inputs:
+  name:
+    description: 'Instance name (must match network action)'
+    required: true
+  action:
+    description: 'Action to perform: apply, destroy, plan'
+    required: false
+    default: 'apply'
+  aws_region:
+    description: 'AWS region'
+    required: false
+    default: 'us-east-1'
+  database_name:
+    description: 'Database name to create'
+    required: false
+    default: 'appdb'
+  deletion_protection_enabled:
+    description: 'Enable deletion protection (recommended for production)'
+    required: false
+    default: 'false'
+  min_capacity:
+    description: 'Minimum ACU capacity (0.5 to 128)'
+    required: false
+    default: '0.5'
+  max_capacity:
+    description: 'Maximum ACU capacity (0.5 to 128)'
+    required: false
+    default: '4'
+  backup_retention_period:
+    description: 'Backup retention in days (1-35)'
+    required: false
+    default: '7'
+  lock_timeout:
+    description: 'Terraform state lock timeout'
+    required: false
+    default: '5m'
+
+outputs:
+  cluster_endpoint:
+    description: 'Aurora cluster endpoint'
+    value: ${{ steps.terraform.outputs.cluster_endpoint }}
+  cluster_arn:
+    description: 'Aurora cluster ARN'
+    value: ${{ steps.terraform.outputs.cluster_arn }}
+  cluster_id:
+    description: 'Aurora cluster identifier'
+    value: ${{ steps.terraform.outputs.cluster_id }}
+  secret_arn:
+    description: 'Secrets Manager ARN containing credentials'
+    value: ${{ steps.terraform.outputs.secret_arn }}
+  database_name:
+    description: 'Database name'
+    value: ${{ steps.terraform.outputs.database_name }}
+  master_username:
+    description: 'Master username'
+    value: ${{ steps.terraform.outputs.master_username }}
+  port:
+    description: 'Database port'
+    value: ${{ steps.terraform.outputs.port }}
+  security_group_id:
+    description: 'Security group ID'
+    value: ${{ steps.terraform.outputs.security_group_id }}
+  connection_string:
+    description: 'Connection string template'
+    value: ${{ steps.terraform.outputs.connection_string }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_wrapper: false
+
+    - name: Run Terraform
+      id: terraform
+      shell: bash
+      env:
+        TF_VAR_instance: ${{ inputs.name }}
+        TF_VAR_aws_region: ${{ inputs.aws_region }}
+        TF_VAR_database_name: ${{ inputs.database_name }}
+        TF_VAR_min_capacity: ${{ inputs.min_capacity }}
+        TF_VAR_max_capacity: ${{ inputs.max_capacity }}
+        TF_VAR_backup_retention_period: ${{ inputs.backup_retention_period }}
+        TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
+        TF_ACTION: ${{ inputs.action }}
+        TF_LOCK_TIMEOUT: ${{ inputs.lock_timeout }}
+      run: |
+        chmod +x ${{ github.action_path }}/entrypoint.sh
+        ${{ github.action_path }}/entrypoint.sh

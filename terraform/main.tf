@@ -10,7 +10,7 @@ locals {
   name_prefix      = var.instance
   cluster_name     = "${local.name_prefix}-aurora"
   parameter_family = "aurora-postgresql${split(".", var.engine_version)[0]}"
-  
+
   # Use provided VPC/subnets or discover from tags
   use_existing_vpc = var.vpc_id != ""
   vpc_id           = local.use_existing_vpc ? var.vpc_id : one(data.aws_vpc.discovered[*].id)
@@ -33,7 +33,7 @@ data "aws_vpc" "existing" {
 
 data "aws_vpc" "discovered" {
   count = local.use_existing_vpc ? 0 : 1
-  
+
   filter {
     name   = "tag:Instance"
     values = [var.instance]
@@ -46,7 +46,7 @@ data "aws_vpc" "discovered" {
 
 data "aws_subnets" "discovered" {
   count = local.use_existing_vpc ? 0 : 1
-  
+
   filter {
     name   = "vpc-id"
     values = [one(data.aws_vpc.discovered[*].id)]

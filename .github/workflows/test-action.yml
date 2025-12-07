@@ -1,0 +1,63 @@
+################################################################################
+# CI: Validate Action
+################################################################################
+
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+      - 'action.yml'
+      - 'entrypoint.sh'
+
+jobs:
+  validate-terraform:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Format Check
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Init & Validate
+        working-directory: terraform
+        run: |
+          cat > backend_override.tf <<EOF
+          terraform {
+            backend "local" { path = "test.tfstate" }
+          }
+          EOF
+          terraform init -backend=false
+          terraform validate
+
+  validate-shell:
+    name: Validate Shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck entrypoint.sh
+
+  validate-action:
+    name: Validate Action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check action.yml
+        run: |
+          python3 -c "
+          import yaml
+          with open('action.yml') as f:
+              a = yaml.safe_load(f)
+              assert 'name' in a
+              assert 'inputs' in a
+              assert 'outputs' in a
+              assert 'runs' in a
+              print('✅ action.yml is valid')
+          "

@@ -1,0 +1,80 @@
+################################################################################
+# Example: Deploy Aurora PostgreSQL for Multiple Environments
+################################################################################
+
+name: Deploy Aurora (Matrix)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+          - plan
+
+jobs:
+  deploy:
+    name: Deploy ${{ matrix.instance }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        instance: [sandbox, demo, client1, client2, client3]
+        include:
+          - instance: sandbox
+            deletion_protection: 'false'
+            max_capacity: '2'
+          - instance: demo
+            deletion_protection: 'false'
+            max_capacity: '2'
+          - instance: client1
+            deletion_protection: 'true'
+            max_capacity: '8'
+          - instance: client2
+            deletion_protection: 'true'
+            max_capacity: '8'
+          - instance: client3
+            deletion_protection: 'true'
+            max_capacity: '8'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: ${{ github.actor }}
+
+      - uses: realsensesolutions/actions-aws-backend-setup@main
+        with:
+          instance: ${{ matrix.instance }}
+
+      - uses: realsensesolutions/actions-aws-network@main
+
+      - uses: realsensesolutions/actions-aws-postgres-aurora@main
+        id: aurora
+        with:
+          name: ${{ matrix.instance }}-db
+          action: ${{ inputs.action }}
+          deletion_protection_enabled: ${{ matrix.deletion_protection }}
+          max_capacity: ${{ matrix.max_capacity }}
+          lock_timeout: '5m'
+
+      - name: Summary
+        if: inputs.action != 'destroy'
+        run: |
+          echo "## Aurora: ${{ matrix.instance }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Endpoint | \`${{ steps.aurora.outputs.cluster_endpoint }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret | \`${{ steps.aurora.outputs.secret_arn }}\` |" >> $GITHUB_STEP_SUMMARY

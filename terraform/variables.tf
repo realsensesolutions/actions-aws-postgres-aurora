@@ -41,7 +41,7 @@ variable "master_username" {
 variable "engine_version" {
   description = "Aurora PostgreSQL engine version"
   type        = string
-  default     = "15.4"
+  default     = "17.4"
 }
 
 variable "min_capacity" {

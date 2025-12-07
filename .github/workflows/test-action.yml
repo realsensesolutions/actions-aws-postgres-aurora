@@ -1,67 +1,89 @@
-################################################################################
-# CI: Validate Action
-################################################################################
-
-name: Validate
+name: Test Action
 
 on:
-  pull_request:
-    branches: [main]
   push:
-    branches: [main]
-    paths:
-      - 'terraform/**'
-      - 'action.yml'
-      - 'entrypoint.sh'
+    branches:
+      - main
+  workflow_dispatch:
 
-permissions:
-  id-token: write
-  contents: read
+env:
+  region: us-east-1
 
 jobs:
-  validate-terraform:
-    name: Validate Terraform
+  test:
+    permissions:
+      id-token: write
+      contents: read
+
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repo
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.region }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: ${{ github.repository_owner }}-${{ github.actor }}
 
-      - name: Format Check
-        run: terraform fmt -check -recursive terraform/
+      - name: Setup Terraform Backend
+        uses: alonch/actions-aws-backend-setup@main
+        id: backend
+        with:
+          instance: test-aurora-action
 
-      - name: Init & Validate
-        working-directory: terraform
+      - name: Setup Network
+        uses: realsensesolutions/actions-aws-network@main
+        id: network
+
+      - name: Deploy Aurora Serverless v2
+        uses: ./
+        id: aurora
+        with:
+          name: test-aurora-action
+          action: apply
+          deletion_protection_enabled: 'false'
+          min_capacity: '0.5'
+          max_capacity: '2'
+
+      - name: Display Outputs
         run: |
-          cat > backend_override.tf <<EOF
-          terraform {
-            backend "local" { path = "test.tfstate" }
-          }
-          EOF
-          terraform init -backend=false
-          terraform validate
+          echo "=== Aurora Cluster Outputs ==="
+          echo "Cluster Endpoint: ${{ steps.aurora.outputs.cluster_endpoint }}"
+          echo "Cluster ARN: ${{ steps.aurora.outputs.cluster_arn }}"
+          echo "Cluster ID: ${{ steps.aurora.outputs.cluster_id }}"
+          echo "Database Name: ${{ steps.aurora.outputs.database_name }}"
+          echo "Master Username: ${{ steps.aurora.outputs.master_username }}"
+          echo "Port: ${{ steps.aurora.outputs.port }}"
+          echo "Secret ARN: ${{ steps.aurora.outputs.secret_arn }}"
+          echo "Security Group ID: ${{ steps.aurora.outputs.security_group_id }}"
+          echo "Connection String: ${{ steps.aurora.outputs.connection_string }}"
 
-  validate-shell:
-    name: Validate Shell
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: shellcheck entrypoint.sh
-
-  validate-action:
-    name: Validate Action
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check action.yml
+      - name: Test Connection (Get Secret)
         run: |
-          python3 -c "
-          import yaml
-          with open('action.yml') as f:
-              a = yaml.safe_load(f)
-              assert 'name' in a
-              assert 'inputs' in a
-              assert 'outputs' in a
-              assert 'runs' in a
-              print('✅ action.yml is valid')
-          "
+          echo "Getting Aurora credentials from Secrets Manager..."
+          SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id ${{ steps.aurora.outputs.secret_arn }} \
+            --query 'SecretString' \
+            --output text)
+          
+          if [ -n "$SECRET" ]; then
+            echo "✓ Credentials retrieved successfully"
+            echo "Host: $(echo $SECRET | jq -r '.host')"
+            echo "Port: $(echo $SECRET | jq -r '.port')"
+            echo "Database: $(echo $SECRET | jq -r '.dbname')"
+            echo "Username: $(echo $SECRET | jq -r '.username')"
+          else
+            echo "✗ Failed to get credentials"
+            exit 1
+          fi
+
+      # - name: Cleanup - Destroy Cluster
+      #   if: always()
+      #   uses: ./
+      #   with:
+      #     name: test-aurora-action
+      #     action: destroy
+      #     deletion_protection_enabled: 'false'

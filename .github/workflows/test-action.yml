@@ -24,8 +24,12 @@ jobs:
       - name: Terraform Validate
         working-directory: terraform
         run: |
-          cat > backend_override.tf <<EOF
-          terraform { backend "local" { path = "test.tfstate" } }
+          cat > backend_override.tf <<'EOF'
+          terraform {
+            backend "local" {
+              path = "test.tfstate"
+            }
+          }
           EOF
           terraform init -backend=false
           terraform validate

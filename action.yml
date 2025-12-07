@@ -101,9 +101,13 @@ runs:
             -backend-config="region=${TF_BACKEND_REGION:-${{ inputs.aws_region }}}" \
             -backend-config="dynamodb_table=${TF_BACKEND_DYNAMODB_TABLE:-}"
         else
-          cat > backend_override.tf <<EOF
-        terraform { backend "local" { path = "${TF_VAR_instance}.tfstate" } }
-        EOF
+          cat > backend_override.tf <<'EOFBACKEND'
+        terraform {
+          backend "local" {
+            path = "local.tfstate"
+          }
+        }
+        EOFBACKEND
           terraform init -input=false -reconfigure
         fi
 

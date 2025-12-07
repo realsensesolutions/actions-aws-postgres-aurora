@@ -62,7 +62,7 @@ jobs:
         id: aurora
         with:
           name: test-aurora-action
-          action: apply
+          action: destroy
           vpc_id: ${{ secrets.TEST_VPC_ID }}
           subnet_ids: ${{ secrets.TEST_SUBNET_IDS }}
           deletion_protection_enabled: 'false'

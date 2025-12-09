@@ -139,17 +139,17 @@ resource "aws_vpc_security_group_ingress_rule" "postgres" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "public_access" {
-  count = var.publicly_accessible && var.allowed_cidr_blocks != "" ? 1 : 0
+  count = var.publicly_accessible ? 1 : 0
 
   security_group_id = aws_security_group.main.id
-  description       = "PostgreSQL from allowed IPs"
+  description       = "PostgreSQL from internet (NOT RECOMMENDED)"
   from_port         = 5432
   to_port           = 5432
   ip_protocol       = "tcp"
-  cidr_ipv4         = var.allowed_cidr_blocks
+  cidr_ipv4         = "0.0.0.0/0"
 
   tags = {
-    Name = "${local.cluster_name}-public-access-ingress"
+    Name = "${local.cluster_name}-public-access"
   }
 }
 

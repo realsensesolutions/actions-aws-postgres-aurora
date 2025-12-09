@@ -38,5 +38,11 @@ coverage/
 
 # Documentation (local only)
 PRODUCTION.md
+CONNECT-LAMBDA.md
+DEEP-DIVE.md
+DEEP-DIVE-ES.md
+
+# Test SQL files (local only)
+test-multi-database.sql
 
 

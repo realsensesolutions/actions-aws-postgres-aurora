@@ -71,11 +71,11 @@ variable "deletion_protection" {
 variable "publicly_accessible" {
   description = "Make Aurora publicly accessible (dev only)"
   type        = bool
-  default     = true # Changed to true
+  default     = false
 }
 
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to connect (if publicly accessible)"
   type        = string
-  default     = "0.0.0.0/0" # Open to all (DEV ONLY!)
+  default     = ""
 }

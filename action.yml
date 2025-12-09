@@ -50,6 +50,10 @@ inputs:
     description: 'Terraform lock timeout'
     required: false
     default: '5m'
+  publicly_accessible:
+    description: 'Make database publicly accessible (NOT recommended for production)'
+    required: false
+    default: 'false'
 
 outputs:
   cluster_endpoint:
@@ -94,6 +98,7 @@ runs:
       env:
         TF_VAR_instance: ${{ inputs.name }}
       run: |
+
         if [[ -n "${TF_BACKEND_s3}" ]]; then
           terraform init -input=false -reconfigure \
             -backend-config="bucket=${TF_BACKEND_s3}" \
@@ -125,6 +130,7 @@ runs:
         TF_VAR_max_capacity: ${{ inputs.max_capacity }}
         TF_VAR_backup_retention_period: ${{ inputs.backup_retention_period }}
         TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
+        TF_VAR_publicly_accessible: ${{ inputs.publicly_accessible }}
       run: |
         terraform plan -input=false -lock-timeout=${{ inputs.lock_timeout }} -out=tfplan
 
@@ -149,6 +155,7 @@ runs:
         TF_VAR_max_capacity: ${{ inputs.max_capacity }}
         TF_VAR_backup_retention_period: ${{ inputs.backup_retention_period }}
         TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
+        TF_VAR_publicly_accessible: ${{ inputs.publicly_accessible }}
       run: |
         terraform destroy -input=false -lock-timeout=${{ inputs.lock_timeout }} -auto-approve
 

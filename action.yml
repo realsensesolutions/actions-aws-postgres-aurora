@@ -106,13 +106,9 @@ runs:
       working-directory: ${{ github.action_path }}/terraform
       env:
         TF_VAR_instance: ${{ inputs.name }}
-        TF_VAR_aws_region: ${{ inputs.aws_region }}
-        TF_VAR_vpc_id: ${{ inputs.vpc_id }}
-        TF_VAR_subnet_ids: ${{ inputs.subnet_ids }}
         TF_VAR_database_name: ${{ inputs.database_name }}
         TF_VAR_min_capacity: ${{ inputs.min_capacity }}
         TF_VAR_max_capacity: ${{ inputs.max_capacity }}
-        TF_VAR_backup_retention_period: ${{ inputs.backup_retention_period }}
         TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
         TF_VAR_publicly_accessible: ${{ inputs.publicly_accessible }}
       run: |

@@ -24,7 +24,7 @@ terraform {
 ################################################################################
 
 provider "aws" {
-  region = var.aws_region
+  # Region inherited from AWS_REGION environment variable or AWS config
 
   default_tags {
     tags = {

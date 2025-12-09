@@ -16,8 +16,20 @@ GitHub Action to provision Aurora Serverless v2 PostgreSQL clusters with Terrafo
   uses: realsensesolutions/actions-aws-postgres-aurora@main
   id: aurora
   with:
-    name: ${{ inputs.instance_name }}-db
+    name: my-app
+```
+
+### With Environment-Specific Configuration
+
+```yaml
+- name: Deploy Aurora PostgreSQL
+  uses: realsensesolutions/actions-aws-postgres-aurora@main
+  id: aurora
+  with:
+    name: ${{ inputs.instance_name }}
     deletion_protection_enabled: ${{ inputs.environment == 'production' }}
+    min_capacity: ${{ inputs.environment == 'production' && '1' || '0.5' }}
+    max_capacity: ${{ inputs.environment == 'production' && '16' || '4' }}
 ```
 
 ## Full Example (infra.yml)
@@ -47,8 +59,11 @@ jobs:
       - uses: realsensesolutions/actions-aws-postgres-aurora@main
         id: aurora
         with:
-          name: ${{ inputs.instance_name }}-db
+          name: ${{ inputs.instance_name }}
+          database_name: ${{ inputs.instance_name }}db
           deletion_protection_enabled: ${{ inputs.environment == 'production' }}
+          min_capacity: ${{ inputs.environment == 'production' && '1' || '0.5' }}
+          max_capacity: ${{ inputs.environment == 'production' && '16' || '4' }}
 
       - uses: realsensesolutions/actions-aws-function-go@main
         with:
@@ -65,13 +80,30 @@ jobs:
 |-------|-------------|----------|---------|
 | `name` | Instance name (must match network action) | ✅ | - |
 | `action` | Action: `apply`, `destroy`, `plan` | ❌ | `apply` |
-| `aws_region` | AWS region | ❌ | `us-east-1` |
 | `database_name` | Database name | ❌ | `appdb` |
-| `deletion_protection_enabled` | Enable deletion protection | ❌ | `false` |
 | `min_capacity` | Minimum ACU (0.5-128) | ❌ | `0.5` |
 | `max_capacity` | Maximum ACU (0.5-128) | ❌ | `4` |
-| `backup_retention_period` | Backup retention days (1-35) | ❌ | `7` |
+| `deletion_protection_enabled` | Enable deletion protection | ❌ | `false` |
+| `publicly_accessible` | Make database publicly accessible (NOT recommended for production) | ❌ | `false` |
 | `lock_timeout` | Terraform lock timeout | ❌ | `5m` |
+
+### Configuration Notes
+
+**Region:** Inherited from `AWS_REGION` environment variable or AWS config. Set via:
+```yaml
+- uses: aws-actions/configure-aws-credentials@v4
+  with:
+    aws-region: us-east-1  # Sets AWS_REGION
+```
+
+**VPC/Subnets:** Auto-discovered from `actions-aws-network` tags. For testing without network action, set job-level environment variables:
+```yaml
+env:
+  TF_VAR_vpc_id: ${{ secrets.TEST_VPC_ID }}
+  TF_VAR_subnet_ids: ${{ secrets.TEST_SUBNET_IDS }}
+```
+
+**Backups:** Hardcoded to 7 days retention (best practice default)
 
 ## Outputs
 
@@ -161,14 +193,42 @@ func GetDB(ctx context.Context) (*sql.DB, error) {
 5. `aws_rds_cluster_parameter_group` - SSL enforced
 6. `aws_secretsmanager_secret` - Credentials storage
 
+## Advanced Usage
+
+### Production with All Options
+
+```yaml
+- uses: realsensesolutions/actions-aws-postgres-aurora@main
+  id: aurora
+  with:
+    name: my-app-prod
+    database_name: production
+    min_capacity: '1'
+    max_capacity: '16'
+    deletion_protection_enabled: 'true'
+    lock_timeout: '10m'
+```
+
+### Development with Public Access (Testing Only)
+
+```yaml
+- uses: realsensesolutions/actions-aws-postgres-aurora@main
+  id: aurora
+  with:
+    name: my-app-dev
+    publicly_accessible: 'true'  # ⚠️ Opens to internet - dev only!
+```
+
+**Note:** Even with `publicly_accessible: true`, the database must be in a public subnet. This is primarily for local testing/debugging. Use SSH tunnels or VPN for production access.
+
 ## Best Practices Applied
 
 - ✅ Storage encryption enabled
 - ✅ SSL connections enforced (`rds.force_ssl = 1`)
 - ✅ Credentials in Secrets Manager (not outputs)
-- ✅ Private subnets only (no public access)
+- ✅ Private subnets only (secure by default)
 - ✅ Security group restricts to VPC CIDR
-- ✅ Backup retention configured
+- ✅ 7-day backup retention
 - ✅ Password without special chars (no URL encoding issues)
 
 ## Cost Estimate

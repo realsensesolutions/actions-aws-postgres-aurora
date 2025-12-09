@@ -28,8 +28,8 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Instance  = var.instance
       ManagedBy = "terraform"
+      Instance  = var.instance
     }
   }
 }

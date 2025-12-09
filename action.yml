@@ -29,7 +29,7 @@ inputs:
   max_capacity:
     description: 'Maximum ACU (0.5-128)'
     required: false
-    default: '4'
+    default: '2'
   lock_timeout:
     description: 'Terraform lock timeout'
     required: false

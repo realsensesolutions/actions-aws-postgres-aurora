@@ -94,12 +94,12 @@ runs:
       env:
         TF_VAR_instance: ${{ inputs.name }}
       run: |
-        if [[ -n "${TF_BACKEND_BUCKET}" ]]; then
+        if [[ -n "${TF_BACKEND_s3}" ]]; then
           terraform init -input=false -reconfigure \
-            -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+            -backend-config="bucket=${TF_BACKEND_s3}" \
             -backend-config="key=aurora/${TF_VAR_instance}/terraform.tfstate" \
-            -backend-config="region=${TF_BACKEND_REGION:-${{ inputs.aws_region }}}" \
-            -backend-config="dynamodb_table=${TF_BACKEND_DYNAMODB_TABLE:-}"
+            -backend-config="region=${{ inputs.aws_region }}" \
+            -backend-config="dynamodb_table=${TF_BACKEND_dynamodb}"
         else
           cat > backend_override.tf <<'EOFBACKEND'
         terraform {

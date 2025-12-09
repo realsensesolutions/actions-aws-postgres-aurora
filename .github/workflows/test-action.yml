@@ -51,6 +51,11 @@ jobs:
     needs: validate
     if: always() && (needs.validate.result == 'success' || github.event.inputs.action == 'destroy')
 
+    env:
+      AWS_REGION: us-east-1
+      TF_VAR_vpc_id: ${{ secrets.TEST_VPC_ID }}
+      TF_VAR_subnet_ids: ${{ secrets.TEST_SUBNET_IDS }}
+
     permissions:
       id-token: write
       contents: read
@@ -76,8 +81,6 @@ jobs:
         with:
           name: test-aurora-action
           action: ${{ github.event.inputs.action || 'apply' }}
-          vpc_id: ${{ secrets.TEST_VPC_ID }}
-          subnet_ids: ${{ secrets.TEST_SUBNET_IDS }}
           deletion_protection_enabled: 'false'
           min_capacity: '0.5'
           max_capacity: '2'

@@ -208,7 +208,7 @@ resource "aws_rds_cluster" "main" {
   }
 
   storage_encrypted       = true
-  backup_retention_period = var.backup_retention_period
+  backup_retention_period = 7
   preferred_backup_window = "03:00-04:00"
 
   deletion_protection       = var.deletion_protection

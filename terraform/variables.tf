@@ -7,13 +7,8 @@ variable "instance" {
   type        = string
 }
 
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
-# Optional: Use existing VPC instead of discovering from network action
+# Optional: Override VPC discovery (mainly for testing)
+# In production, leave empty to auto-discover from network action tags
 variable "vpc_id" {
   description = "Existing VPC ID (optional - if not provided, discovers from network action)"
   type        = string
@@ -54,12 +49,6 @@ variable "max_capacity" {
   description = "Maximum ACU capacity (0.5 to 128)"
   type        = number
   default     = 4
-}
-
-variable "backup_retention_period" {
-  description = "Days to retain backups (1-35)"
-  type        = number
-  default     = 7
 }
 
 variable "deletion_protection" {

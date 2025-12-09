@@ -36,4 +36,7 @@ Thumbs.db
 test-results/
 coverage/
 
+# Documentation (local only)
+PRODUCTION.md
+
 

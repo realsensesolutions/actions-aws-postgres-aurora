@@ -138,6 +138,21 @@ resource "aws_vpc_security_group_ingress_rule" "postgres" {
   }
 }
 
+resource "aws_vpc_security_group_ingress_rule" "public_access" {
+  count = var.publicly_accessible && var.allowed_cidr_blocks != "" ? 1 : 0
+
+  security_group_id = aws_security_group.main.id
+  description       = "PostgreSQL from allowed IPs"
+  from_port         = 5432
+  to_port           = 5432
+  ip_protocol       = "tcp"
+  cidr_ipv4         = var.allowed_cidr_blocks
+
+  tags = {
+    Name = "${local.cluster_name}-public-access-ingress"
+  }
+}
+
 resource "aws_vpc_security_group_egress_rule" "all" {
   security_group_id = aws_security_group.main.id
   description       = "All outbound"
@@ -226,7 +241,7 @@ resource "aws_rds_cluster_instance" "main" {
   engine         = aws_rds_cluster.main.engine
   engine_version = aws_rds_cluster.main.engine_version
 
-  publicly_accessible = false
+  publicly_accessible = var.publicly_accessible
   apply_immediately   = true
 
   tags = {

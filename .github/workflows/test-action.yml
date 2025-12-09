@@ -65,6 +65,7 @@ jobs:
           role-session-name: ${{ github.repository_owner }}-${{ github.actor }}
 
       - name: Setup Terraform Backend
+        id: backend
         uses: alonch/actions-aws-backend-setup@main
         with:
           instance: test-aurora-action
@@ -72,6 +73,10 @@ jobs:
       - name: Run Aurora Action
         uses: ./
         id: aurora
+        env:
+          TF_BACKEND_BUCKET: ${{ steps.backend.outputs.bucket }}
+          TF_BACKEND_REGION: ${{ steps.backend.outputs.region }}
+          TF_BACKEND_DYNAMODB_TABLE: ${{ steps.backend.outputs.dynamodb_table }}
         with:
           name: test-aurora-action
           action: ${{ github.event.inputs.action || 'apply' }}

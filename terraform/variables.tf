@@ -69,13 +69,7 @@ variable "deletion_protection" {
 }
 
 variable "publicly_accessible" {
-  description = "Make Aurora publicly accessible (dev only)"
+  description = "Make database publicly accessible (NOT recommended for production)"
   type        = bool
   default     = false
-}
-
-variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to connect (if publicly accessible)"
-  type        = string
-  default     = ""
 }

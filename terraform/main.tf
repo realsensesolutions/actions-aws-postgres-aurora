@@ -15,7 +15,17 @@ locals {
   use_existing_vpc = var.vpc_id != ""
   vpc_id           = local.use_existing_vpc ? var.vpc_id : one(data.aws_vpc.discovered[*].id)
   vpc_cidr         = local.use_existing_vpc ? one(data.aws_vpc.existing[*].cidr_block) : one(data.aws_vpc.discovered[*].cidr_block)
-  subnet_ids       = local.use_existing_vpc ? split(",", var.subnet_ids) : one(data.aws_subnets.discovered[*].ids)
+  
+  # Select subnet IDs based on publicly_accessible and whether VPC is provided
+  # When VPC is provided: use subnet_public_ids if publicly_accessible, otherwise subnet_private_ids
+  # When auto-discovering: discovered subnets are filtered by Type tag (public/private) based on publicly_accessible
+  subnet_ids = local.use_existing_vpc ? (
+    var.publicly_accessible ? (
+      var.subnet_public_ids != "" ? split(",", var.subnet_public_ids) : split(",", var.subnet_ids)
+    ) : (
+      var.subnet_private_ids != "" ? split(",", var.subnet_private_ids) : split(",", var.subnet_ids)
+    )
+  ) : one(data.aws_subnets.discovered[*].ids)
 }
 
 ################################################################################
@@ -53,7 +63,7 @@ data "aws_subnets" "discovered" {
   }
   filter {
     name   = "tag:Type"
-    values = ["private"]
+    values = [var.publicly_accessible ? "public" : "private"]
   }
   filter {
     name   = "tag:Instance"

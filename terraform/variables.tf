@@ -16,7 +16,19 @@ variable "vpc_id" {
 }
 
 variable "subnet_ids" {
-  description = "Comma-separated subnet IDs (required if vpc_id is provided)"
+  description = "Comma-separated subnet IDs (deprecated - use subnet_private_ids or subnet_public_ids)"
+  type        = string
+  default     = ""
+}
+
+variable "subnet_private_ids" {
+  description = "Comma-separated private subnet IDs (used when vpc_id is provided and publicly_accessible is false)"
+  type        = string
+  default     = ""
+}
+
+variable "subnet_public_ids" {
+  description = "Comma-separated public subnet IDs (used when vpc_id is provided and publicly_accessible is true)"
   type        = string
   default     = ""
 }

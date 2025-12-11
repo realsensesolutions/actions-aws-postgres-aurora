@@ -11,6 +11,16 @@ locals {
   cluster_name     = "${local.name_prefix}-aurora"
   parameter_family = "aurora-postgresql${split(".", var.engine_version)[0]}"
 
+  # Sanitize database name: RDS requires it to begin with a letter and contain only alphanumeric characters
+  # Replace all non-alphanumeric characters with underscores, ensure it starts with a letter
+  sanitized_db_name = lower(
+    length(regexall("^[a-zA-Z]", var.database_name)) > 0 ? (
+      regexreplace(var.database_name, "[^a-zA-Z0-9]", "_")
+      ) : (
+      regexreplace("db${var.database_name}", "[^a-zA-Z0-9]", "_")
+    )
+  )
+
   # Use provided VPC/subnets or discover from tags
   use_existing_vpc = var.vpc_id != ""
   vpc_id           = local.use_existing_vpc ? var.vpc_id : one(data.aws_vpc.discovered[*].id)
@@ -101,9 +111,9 @@ resource "aws_secretsmanager_secret_version" "credentials" {
     port              = aws_rds_cluster.main.port
     username          = var.master_username
     password          = random_password.master.result
-    dbname            = var.database_name
+    dbname            = local.sanitized_db_name
     engine            = "postgres"
-    connection_string = "postgres://${var.master_username}:${random_password.master.result}@${aws_rds_cluster.main.endpoint}:${aws_rds_cluster.main.port}/${var.database_name}?sslmode=require"
+    connection_string = "postgres://${var.master_username}:${random_password.master.result}@${aws_rds_cluster.main.endpoint}:${aws_rds_cluster.main.port}/${local.sanitized_db_name}?sslmode=require"
   })
 }
 
@@ -204,7 +214,7 @@ resource "aws_rds_cluster" "main" {
   engine_mode    = "provisioned"
   engine_version = var.engine_version
 
-  database_name   = var.database_name
+  database_name   = local.sanitized_db_name
   master_username = var.master_username
   master_password = random_password.master.result
 

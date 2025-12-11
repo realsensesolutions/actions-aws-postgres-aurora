@@ -12,14 +12,14 @@ locals {
   parameter_family = "aurora-postgresql${split(".", var.engine_version)[0]}"
 
   # Sanitize database name: RDS requires it to begin with a letter and contain only alphanumeric characters
-  # Replace all non-alphanumeric characters with underscores, ensure it starts with a letter
-  sanitized_db_name = lower(
-    length(regexall("^[a-zA-Z]", var.database_name)) > 0 ? (
-      regexreplace(var.database_name, "[^a-zA-Z0-9]", "_")
-      ) : (
-      regexreplace("db${var.database_name}", "[^a-zA-Z0-9]", "_")
-    )
-  )
+  # Replace common invalid characters (hyphens, dots, spaces) with underscores
+  db_name_cleaned = replace(replace(replace(var.database_name, "-", "_"), ".", "_"), " ", "_")
+
+  # Ensure it starts with a letter, prefix with 'db' if it doesn't
+  db_name_with_prefix = length(regexall("^[a-zA-Z]", local.db_name_cleaned)) > 0 ? local.db_name_cleaned : "db${local.db_name_cleaned}"
+
+  # Convert to lowercase (RDS database names are case-insensitive)
+  sanitized_db_name = lower(local.db_name_with_prefix)
 
   # Use provided VPC/subnets or discover from tags
   use_existing_vpc = var.vpc_id != ""

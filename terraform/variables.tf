@@ -34,9 +34,14 @@ variable "subnet_public_ids" {
 }
 
 variable "database_name" {
-  description = "Name of the default database"
+  description = "Name of the default database (will be sanitized to contain only alphanumeric characters and start with a letter)"
   type        = string
   default     = "appdb"
+
+  validation {
+    condition     = length(var.database_name) > 0 && length(var.database_name) <= 63
+    error_message = "Database name must be between 1 and 63 characters long."
+  }
 }
 
 variable "master_username" {

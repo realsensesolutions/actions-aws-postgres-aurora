@@ -26,16 +26,16 @@ locals {
   vpc_id           = local.use_existing_vpc ? var.vpc_id : one(data.aws_vpc.discovered[*].id)
   vpc_cidr         = local.use_existing_vpc ? one(data.aws_vpc.existing[*].cidr_block) : one(data.aws_vpc.discovered[*].cidr_block)
 
-  # Select subnet IDs based on publicly_accessible and whether VPC is provided
-  # When VPC is provided: use subnet_public_ids if publicly_accessible, otherwise subnet_private_ids
-  # When auto-discovering: discovered subnets are filtered by Type tag (public/private) based on publicly_accessible
-  subnet_ids = local.use_existing_vpc ? (
-    var.publicly_accessible ? (
-      var.subnet_public_ids != "" ? split(",", var.subnet_public_ids) : split(",", var.subnet_ids)
-      ) : (
-      var.subnet_private_ids != "" ? split(",", var.subnet_private_ids) : split(",", var.subnet_ids)
-    )
-  ) : one(data.aws_subnets.discovered[*].ids)
+  # Subnet IDs for the DB subnet group - must include ALL subnets (public + private)
+  # This prevents errors when switching publicly_accessible, since AWS doesn't allow
+  # removing subnets from a subnet group while an RDS instance is using them.
+  # When VPC is provided: combine both public and private subnets if available
+  # When auto-discovering: get all subnets (both public and private)
+  subnet_ids = local.use_existing_vpc ? distinct(concat(
+    var.subnet_public_ids != "" ? split(",", var.subnet_public_ids) : [],
+    var.subnet_private_ids != "" ? split(",", var.subnet_private_ids) : [],
+    var.subnet_ids != "" ? split(",", var.subnet_ids) : []
+  )) : one(data.aws_subnets.all[*].ids)
 }
 
 ################################################################################
@@ -64,16 +64,14 @@ data "aws_vpc" "discovered" {
   }
 }
 
-data "aws_subnets" "discovered" {
+# Discover ALL subnets (both public and private) for the DB subnet group
+# The subnet group must contain all subnets to allow switching publicly_accessible without errors
+data "aws_subnets" "all" {
   count = local.use_existing_vpc ? 0 : 1
 
   filter {
     name   = "vpc-id"
     values = [one(data.aws_vpc.discovered[*].id)]
-  }
-  filter {
-    name   = "tag:Type"
-    values = [var.publicly_accessible ? "public" : "private"]
   }
   filter {
     name   = "tag:Instance"

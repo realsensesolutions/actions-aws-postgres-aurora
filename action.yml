@@ -88,6 +88,7 @@ runs:
             -backend-config="bucket=${TF_BACKEND_s3}" \
             -backend-config="key=aurora/${TF_VAR_instance}/terraform.tfstate" \
             -backend-config="region=${{ inputs.aws_region }}" \
+            -backend-config="use_lockfile=true" \
             -backend-config="dynamodb_table=${TF_BACKEND_dynamodb}"
         else
           cat > backend_override.tf <<'EOFBACKEND'

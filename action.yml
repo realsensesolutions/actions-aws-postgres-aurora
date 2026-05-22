@@ -38,6 +38,10 @@ inputs:
     description: 'Make database publicly accessible (NOT recommended for production)'
     required: false
     default: 'false'
+  auto_minor_version_upgrade:
+    description: 'Allow AWS to auto-apply minor version upgrades'
+    required: false
+    default: 'true'
 
 outputs:
   cluster_endpoint:
@@ -111,6 +115,7 @@ runs:
         TF_VAR_max_capacity: ${{ inputs.max_capacity }}
         TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
         TF_VAR_publicly_accessible: ${{ inputs.publicly_accessible }}
+        TF_VAR_auto_minor_version_upgrade: ${{ inputs.auto_minor_version_upgrade }}
       run: |
         terraform plan -input=false -lock-timeout=${{ inputs.lock_timeout }} -out=tfplan
 
@@ -118,6 +123,14 @@ runs:
       if: inputs.action == 'apply'
       shell: bash
       working-directory: ${{ github.action_path }}/terraform
+      env:
+        TF_VAR_instance: ${{ inputs.name }}
+        TF_VAR_database_name: ${{ inputs.database_name }}
+        TF_VAR_min_capacity: ${{ inputs.min_capacity }}
+        TF_VAR_max_capacity: ${{ inputs.max_capacity }}
+        TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
+        TF_VAR_publicly_accessible: ${{ inputs.publicly_accessible }}
+        TF_VAR_auto_minor_version_upgrade: ${{ inputs.auto_minor_version_upgrade }}
       run: |
         terraform apply -input=false -lock-timeout=${{ inputs.lock_timeout }} -auto-approve tfplan
 
@@ -132,6 +145,7 @@ runs:
         TF_VAR_max_capacity: ${{ inputs.max_capacity }}
         TF_VAR_deletion_protection: ${{ inputs.deletion_protection_enabled }}
         TF_VAR_publicly_accessible: ${{ inputs.publicly_accessible }}
+        TF_VAR_auto_minor_version_upgrade: ${{ inputs.auto_minor_version_upgrade }}
       run: |
         terraform destroy -input=false -lock-timeout=${{ inputs.lock_timeout }} -auto-approve
 

@@ -53,7 +53,13 @@ variable "master_username" {
 variable "engine_version" {
   description = "Aurora PostgreSQL engine version"
   type        = string
-  default     = "17.4"
+  default     = "17.7"
+}
+
+variable "auto_minor_version_upgrade" {
+  description = "Allow AWS to auto-apply minor version upgrades (recommended: true)"
+  type        = bool
+  default     = true
 }
 
 variable "min_capacity" {

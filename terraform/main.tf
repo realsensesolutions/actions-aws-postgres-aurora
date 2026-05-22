@@ -242,7 +242,8 @@ resource "aws_rds_cluster" "main" {
   lifecycle {
     ignore_changes = [
       availability_zones,
-      final_snapshot_identifier
+      final_snapshot_identifier,
+      engine_version,
     ]
   }
 }
@@ -259,10 +260,15 @@ resource "aws_rds_cluster_instance" "main" {
   engine         = aws_rds_cluster.main.engine
   engine_version = aws_rds_cluster.main.engine_version
 
-  publicly_accessible = var.publicly_accessible
-  apply_immediately   = true
+  publicly_accessible        = var.publicly_accessible
+  auto_minor_version_upgrade = var.auto_minor_version_upgrade
+  apply_immediately          = true
 
   tags = {
     Name = "${local.cluster_name}-instance"
+  }
+
+  lifecycle {
+    ignore_changes = [engine_version]
   }
 }
